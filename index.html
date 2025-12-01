@@ -2,315 +2,356 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Professional RL-HVAC Demo</title>
+    <title>RL-HVAC Battery Arbitrage Demo</title>
     <style>
-        /* 布局样式保持大尺寸 */
         body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         .dashboard { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); display: flex; gap: 30px; max-width: 1300px; width: 100%; }
-        .room-view { width: 480px; display: flex; flex-direction: column; align-items: center; border-right: 2px solid #eee; padding-right: 30px; }
+        
+        .control-view { width: 400px; display: flex; flex-direction: column; align-items: center; border-right: 2px solid #eee; padding-right: 30px; }
         .charts-view { flex: 1; display: flex; flex-direction: column; justify-content: center; }
         
-        canvas { border: 1px solid #ccc; background: #fdfdfd; border-radius: 8px; margin-bottom: 20px; display: block; }
+        canvas { border: 1px solid #ccc; background: #fdfdfd; border-radius: 12px; margin-bottom: 20px; display: block; }
         
         h2 { font-size: 28px; margin-bottom: 20px; color: #222; }
         h3 { margin: 10px 0 5px 0; color: #444; font-size: 20px; }
         
-        button { background: #007bff; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-size: 20px; font-weight: bold; transition: 0.3s; width: 100%; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,123,255,0.2); }
-        button:hover { background: #0056b3; transform: translateY(-2px); }
-        button.occupied { background: #28a745; box-shadow: 0 4px 6px rgba(40,167,69,0.2); }
-        button.occupied:hover { background: #218838; }
+        /* 状态卡片 */
+        .status-card { width: 100%; background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 20px; border-left: 8px solid #ccc; transition: 0.3s; }
+        .status-card.charge { border-left-color: #28a745; background: #e6f4ea; }
+        .status-card.discharge { border-left-color: #dc3545; background: #ffe6e6; }
+        .status-title { font-size: 14px; color: #666; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .status-text { font-size: 24px; font-weight: bold; margin: 5px 0; color: #333; }
         
-        .status-badge { padding: 8px 20px; border-radius: 30px; font-size: 18px; font-weight: bold; margin-bottom: 20px; display: inline-block; }
-        .status-eco { background: #e6f4ea; color: #1e8e3e; border: 2px solid #1e8e3e; }
-        .status-comfort { background: #e8f0fe; color: #1967d2; border: 2px solid #1967d2; }
+        /* 时间滑块 */
+        .slider-container { width: 100%; margin-top: 20px; }
+        input[type=range] { width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none; -webkit-appearance: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #007bff; cursor: pointer; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         
-        .legend { font-size: 14px; color: #666; display: flex; gap: 20px; margin-bottom: 10px; }
-        .dot { width: 14px; height: 14px; display: inline-block; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-        .info-text { text-align: left; width: 100%; margin-top: 15px; font-size: 16px; line-height: 1.6; color: #555; }
-        .info-text span { font-weight: bold; }
+        .play-btn { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; margin-top: 15px; width: 100%; }
+        .play-btn:hover { background: #0056b3; }
+        
+        .savings-box { text-align: center; margin-top: 10px; padding: 15px; background: #f0fff4; border: 1px solid #c3e6cb; border-radius: 10px; width: 100%; }
+        .savings-counter { font-size: 36px; color: #28a745; font-weight: bold; font-family: monospace; }
+        
+        .legend { font-size: 14px; color: #666; display: flex; gap: 20px; margin-bottom: 5px; }
+        .dot { width: 12px; height: 12px; display: inline-block; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
     </style>
 </head>
 <body>
 
-    <h2>RL-HVAC Direct Power Control Demo</h2>
+    <h2>RL-HVAC Intelligent Storage Arbitrage Demo</h2>
     <div class="dashboard">
-        <div class="room-view">
-            <div id="modeBadge" class="status-badge status-eco">MODE: ECO (Energy Saving)</div>
-            <canvas id="roomCanvas" width="450" height="450"></canvas>
-            
-            <div class="info-text">
-                <p><strong>Current State:</strong></p>
-                <p>Occupancy: <span id="occText" style="color: gray;">NO</span></p>
-                <p>Comfort Weight (λ): <span id="weightText">Low</span></p>
-                <p>Constraint: <span id="constraintText">Relaxed</span></p>
+        <div class="control-view">
+            <div id="statusCard" class="status-card">
+                <div class="status-title">Current Strategy</div>
+                <div class="status-text" id="strategyText">IDLE</div>
+                <div style="font-size: 16px; color:#555; margin-top:5px;">Time: <span id="timeText" style="font-weight:bold;">00:00</span></div>
             </div>
 
-            <button id="toggleBtn" onclick="toggleOccupancy()">Simulate Person Entering</button>
+            <canvas id="batteryCanvas" width="300" height="280"></canvas>
+
+            <div class="savings-box">
+                <div style="font-size:14px; color:#155724; font-weight:bold;">TOTAL COST SAVED</div>
+                <div class="savings-counter">$<span id="moneyText">0.00</span></div>
+            </div>
+
+            <div class="slider-container">
+                <input type="range" min="0" max="23.9" step="0.1" value="0" id="timeSlider">
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:#888; margin-top:5px;">
+                    <span>00:00</span><span>12:00</span><span>23:59</span>
+                </div>
+            </div>
+            <button class="play-btn" id="playBtn" onclick="togglePlay()">Pause Simulation</button>
         </div>
 
         <div class="charts-view">
-            <h3>Indoor Temperature (°C)</h3>
+            <h3>1. Electricity Price ($/kWh) - The Signal</h3>
             <div class="legend">
-                <span><span class="dot" style="background:#ff4444"></span>Temp</span>
-                <span><span class="dot" style="background:rgba(40, 167, 69, 0.2); border:1px solid #999"></span>Comfort Range</span>
+                <span><span class="dot" style="background:#e6f4ea; border:1px solid #28a745"></span>Cheap Zone (Charge)</span>
+                <span><span class="dot" style="background:#ffe6e6; border:1px solid #dc3545"></span>Peak Zone (Discharge)</span>
             </div>
-            <canvas id="tempChart" width="800" height="220"></canvas>
+            <canvas id="priceCanvas" width="800" height="180"></canvas>
 
-            <h3>HVAC Power Output (%)</h3>
+            <h3>2. Grid Load (kW) - The Result</h3>
             <div class="legend">
-                <span><span class="dot" style="background:#007bff"></span>Power Action</span>
+                <span><span class="dot" style="background:#bbb; border:1px dashed #666"></span>Original Load (No Battery)</span>
+                <span><span class="dot" style="background:#007bff"></span>Optimized Grid Load</span>
+                <span><span class="dot" style="background:orange"></span>Peak Shaved</span>
             </div>
-            <canvas id="powerChart" width="800" height="220"></canvas>
+            <canvas id="loadCanvas" width="800" height="250"></canvas>
         </div>
     </div>
 
     <script>
-        // --- 仿真参数 ---
-        let isOccupied = false;
-        let time = 0;
-        let indoorTemp = 26.0;
-        let ambientTemp = 33.0; 
-        const coolingPowerMax = 0.25; 
-        const heatLeakage = 0.01; 
-        let targetTemp = 24.0;
-        let currentPower = 0.0;
-        let upperLimit = 28.0;
-        let lowerLimit = 20.0;
+        // --- 1. 数据生成 (模拟一天) ---
+        const HOURS = 24;
+        const RESOLUTION = 10; 
+        const TOTAL_POINTS = HOURS * RESOLUTION;
+        
+        let priceData = [];
+        let loadData = [];
+        let batterySOC = []; 
+        let gridLoad = [];
+        let savingsHistory = [];
+        let moneySaved = 0;
+        let currentSOC = 0.2; // 20% 初始电量
 
-        // 数据记录
-        const maxDataPoints = 300;
-        let tempData = new Array(maxDataPoints).fill(26);
-        let powerData = new Array(maxDataPoints).fill(0);
-        let limitData = new Array(maxDataPoints).fill({upper: 28, lower: 20});
+        // 生成基础数据
+        for(let i=0; i<TOTAL_POINTS; i++) {
+            let h = i / RESOLUTION;
+            
+            // 电价：0-6点低(0.1), 6-14点中(0.2), 14-20点高(0.5), 20-24点中(0.2)
+            let p = 0.2;
+            if (h < 6) p = 0.1;
+            else if (h >= 14 && h < 20) p = 0.5; // 尖峰时刻
+            priceData.push(p);
 
-        // Canvas
-        const roomCanvas = document.getElementById('roomCanvas');
-        const roomCtx = roomCanvas.getContext('2d');
-        const tempCanvas = document.getElementById('tempChart');
-        const tempCtx = tempCanvas.getContext('2d');
-        const powerCanvas = document.getElementById('powerChart');
-        const powerCtx = powerCanvas.getContext('2d');
-
-        // --- 布局参数 (解决坐标轴问题的关键) ---
-        const layout = {
-            paddingLeft: 60,  // 给左边文字留 60px
-            paddingRight: 20,
-            paddingTop: 20,   // 给顶部留 20px 防止切字
-            paddingBottom: 20
-        };
-
-        // --- 核心逻辑 ---
-        function updateSimulation() {
-            indoorTemp += (ambientTemp - indoorTemp) * heatLeakage;
-            indoorTemp -= currentPower * coolingPowerMax;
-            indoorTemp += (Math.random() - 0.5) * 0.05;
-
-            if (isOccupied) {
-                let error = indoorTemp - targetTemp;
-                let desiredPower = (error * 1.8) + 0.35; 
-                if (desiredPower > currentPower + 0.025) currentPower += 0.025;
-                else if (desiredPower < currentPower - 0.025) currentPower -= 0.025;
-                else currentPower = desiredPower;
-                upperLimit = 24.4; lowerLimit = 23.6;
-            } else {
-                upperLimit = 28.0; lowerLimit = 20.0;
-                if (indoorTemp > upperLimit - 0.3) currentPower = 0.25;
-                else currentPower = 0.0; 
-            }
-            currentPower = Math.max(0, Math.min(1, currentPower));
-
-            tempData.push(indoorTemp); tempData.shift();
-            powerData.push(currentPower); powerData.shift();
-            limitData.push({upper: upperLimit, lower: lowerLimit}); limitData.shift();
-            time++;
+            // 原始负荷：下午最热
+            let base = 50;
+            let peak = 120 * Math.exp(-Math.pow(h - 17, 2) / 12); 
+            loadData.push(base + peak);
         }
 
-        // --- 绘图逻辑 ---
+        // 模拟 RL 策略运行
+        for(let i=0; i<TOTAL_POINTS; i++) {
+            let h = i / RESOLUTION;
+            let p = priceData[i];
+            let load = loadData[i];
+            let action = 0; // +充电, -放电
+
+            // [策略逻辑]
+            // 1. 凌晨便宜：充电
+            if (p < 0.15 && currentSOC < 0.9) {
+                action = 30; 
+            }
+            // 2. 下午又贵又热：放电 (削峰)
+            else if (p > 0.4 && load > 100 && currentSOC > 0.1) {
+                action = -50; 
+            }
+
+            // 更新 SOC
+            currentSOC += action / 600; 
+            currentSOC = Math.max(0.1, Math.min(1.0, currentSOC));
+            batterySOC.push(currentSOC);
+
+            // 计算电网实际负荷 = 原始 + 充电 - 放电
+            let net = load + action;
+            gridLoad.push(net);
+
+            // 计算省钱
+            let costOld = load * p;
+            let costNew = net * p;
+            moneySaved += (costOld - costNew) * 0.1; // 累积
+            savingsHistory.push(moneySaved);
+        }
+
+        // --- 2. 动画控制 ---
+        let currentIndex = 0;
+        let isPlaying = true;
+        
+        const slider = document.getElementById('timeSlider');
+        const playBtn = document.getElementById('playBtn');
+        const statusCard = document.getElementById('statusCard');
+        const strategyText = document.getElementById('strategyText');
+        const timeText = document.getElementById('timeText');
+        const moneyText = document.getElementById('moneyText');
+
+        const batCtx = document.getElementById('batteryCanvas').getContext('2d');
+        const priceCtx = document.getElementById('priceCanvas').getContext('2d');
+        const loadCtx = document.getElementById('loadCanvas').getContext('2d');
+
+        // 事件监听
+        slider.addEventListener('input', (e) => {
+            currentIndex = Math.floor(e.target.value * RESOLUTION);
+            isPlaying = false;
+            playBtn.innerText = "Resume Simulation";
+            draw();
+        });
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            playBtn.innerText = isPlaying ? "Pause Simulation" : "Resume Simulation";
+        }
+
+        // --- 3. 核心循环 ---
+        function loop() {
+            if (isPlaying) {
+                currentIndex++;
+                if (currentIndex >= TOTAL_POINTS) currentIndex = 0;
+                slider.value = currentIndex / RESOLUTION;
+                draw();
+            }
+            requestAnimationFrame(loop);
+        }
+
         function draw() {
-            roomCtx.clearRect(0, 0, roomCanvas.width, roomCanvas.height);
-            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-            powerCtx.clearRect(0, 0, powerCanvas.width, powerCanvas.height);
+            let h = currentIndex / RESOLUTION;
+            let soc = batterySOC[currentIndex];
+            let net = gridLoad[currentIndex];
+            let raw = loadData[currentIndex];
+            let diff = net - raw; // 动作
 
-            drawRoom();
-            drawChart(tempCtx, tempCanvas, tempData, limitData, 18, 34, "°C", true);
-            drawChart(powerCtx, powerCanvas, powerData, null, 0, 1, "%", false); // Power 0-1
-
-            requestAnimationFrame(animate);
+            updateUI(h, diff, savingsHistory[currentIndex]);
+            drawBattery(soc, diff);
+            drawPriceChart(priceCtx, 800, 180);
+            drawLoadChart(loadCtx, 800, 250);
         }
 
-        function animate() { updateSimulation(); draw(); }
+        function updateUI(h, diff, saved) {
+            let hh = Math.floor(h);
+            let mm = Math.floor((h - hh) * 60);
+            timeText.innerText = `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`;
+            moneyText.innerText = saved.toFixed(2);
 
-        // --- 画图表 (通用函数，带 Padding) ---
-        function drawChart(ctx, canvas, data, limits, minVal, maxVal, unit, isTemp) {
-            let W = canvas.width;
-            let H = canvas.height;
-            // 计算绘图区域的宽高
-            let graphW = W - layout.paddingLeft - layout.paddingRight;
-            let graphH = H - layout.paddingTop - layout.paddingBottom;
-
-            // 1. 画网格和坐标轴
-            ctx.strokeStyle = "#e0e0e0";
-            ctx.lineWidth = 1;
-            ctx.fillStyle = "#666";
-            ctx.font = "bold 14px Arial";
-            ctx.textAlign = "right";
-            ctx.textBaseline = "middle"; // 垂直居中，防止切字
-
-            let lines = 5;
-            for (let i = 0; i < lines; i++) {
-                let y = layout.paddingTop + i * (graphH / (lines - 1));
-                
-                // 网格线
-                ctx.beginPath();
-                ctx.moveTo(layout.paddingLeft, y);
-                ctx.lineTo(W - layout.paddingRight, y);
-                ctx.stroke();
-
-                // 坐标数值
-                let val = maxVal - (i / (lines - 1)) * (maxVal - minVal);
-                if (!isTemp) val *= 100; // Power 转 %
-                ctx.fillText(Math.round(val) + unit, layout.paddingLeft - 10, y);
+            if (diff > 5) {
+                statusCard.className = "status-card charge";
+                strategyText.innerText = "CHARGING (Low Price)";
+                strategyText.style.color = "#155724";
+            } else if (diff < -5) {
+                statusCard.className = "status-card discharge";
+                strategyText.innerText = "DISCHARGING (Peak Shaving)";
+                strategyText.style.color = "#721c24";
+            } else {
+                statusCard.className = "status-card";
+                strategyText.innerText = "STANDBY";
+                strategyText.style.color = "#333";
             }
+        }
 
-            // 2. 画舒适区 (仅 Temperature)
-            if (limits) {
-                ctx.fillStyle = isOccupied ? "rgba(0, 123, 255, 0.15)" : "rgba(40, 167, 69, 0.1)";
+        // --- 4. 绘图函数 ---
+        
+        // 画电池
+        function drawBattery(soc, action) {
+            let ctx = batCtx;
+            ctx.clearRect(0, 0, 300, 280);
+            
+            // 电池壳
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = "#444";
+            ctx.strokeRect(80, 50, 140, 200);
+            ctx.fillStyle = "#444";
+            ctx.fillRect(120, 35, 60, 15); // 头
+
+            // 电量柱
+            let h = 180 * soc;
+            let y = 240 - h;
+            let color = soc > 0.3 ? "#28a745" : "#dc3545";
+            ctx.fillStyle = color;
+            ctx.fillRect(90, y, 120, h);
+
+            // 百分比
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 24px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(Math.round(soc*100) + "%", 150, 160);
+
+            // 动态箭头
+            if (action > 5) { // 充电
+                ctx.fillStyle = "#28a745";
                 ctx.beginPath();
-                // 上边界
-                let firstY = map(limits[0].upper, minVal, maxVal, graphH, 0) + layout.paddingTop;
-                ctx.moveTo(layout.paddingLeft, firstY);
-                
-                for (let i = 0; i < maxDataPoints; i++) {
-                    let x = layout.paddingLeft + i * (graphW / maxDataPoints);
-                    let y = map(limits[i].upper, minVal, maxVal, graphH, 0) + layout.paddingTop;
-                    ctx.lineTo(x, y);
-                }
-                // 下边界 (倒着画回来闭合)
-                for (let i = maxDataPoints - 1; i >= 0; i--) {
-                    let x = layout.paddingLeft + i * (graphW / maxDataPoints);
-                    let y = map(limits[i].lower, minVal, maxVal, graphH, 0) + layout.paddingTop;
-                    ctx.lineTo(x, y);
-                }
+                ctx.moveTo(150, 270); ctx.lineTo(130, 290); ctx.lineTo(170, 290);
                 ctx.fill();
+                ctx.font = "bold 16px Arial"; ctx.fillText("Grid → Battery", 150, 310);
+            } else if (action < -5) { // 放电
+                ctx.fillStyle = "#dc3545";
+                ctx.beginPath();
+                ctx.moveTo(150, 30); ctx.lineTo(130, 10); ctx.lineTo(170, 10);
+                ctx.fill();
+                ctx.font = "bold 16px Arial"; ctx.fillText("Battery → House", 150, 20);
             }
+        }
 
-            // 3. 画数据曲线
+        // 画电价图
+        function drawPriceChart(ctx, w, h) {
+            ctx.clearRect(0, 0, w, h);
+            
+            // 背景区域 (绿色低价，红色高价)
+            let xGreenEnd = (6 * RESOLUTION) * (w/TOTAL_POINTS);
+            let xRedStart = (14 * RESOLUTION) * (w/TOTAL_POINTS);
+            let xRedEnd = (20 * RESOLUTION) * (w/TOTAL_POINTS);
+
+            ctx.fillStyle = "#e6f4ea"; ctx.fillRect(0, 0, xGreenEnd, h); // Charge Zone
+            ctx.fillStyle = "#ffe6e6"; ctx.fillRect(xRedStart, 0, xRedEnd-xRedStart, h); // Discharge Zone
+
+            // 曲线
             ctx.beginPath();
             ctx.lineWidth = 3;
-            ctx.strokeStyle = isTemp ? "#ff4444" : "#007bff";
-            if (!isTemp) ctx.fillStyle = "rgba(0, 123, 255, 0.2)"; // Power 加填充
-            
-            // 移动到第一个点
-            let startY = map(data[0], minVal, maxVal, graphH, 0) + layout.paddingTop;
-            ctx.moveTo(layout.paddingLeft, startY);
-
-            for (let i = 0; i < maxDataPoints; i++) {
-                let x = layout.paddingLeft + i * (graphW / maxDataPoints);
-                let y = map(data[i], minVal, maxVal, graphH, 0) + layout.paddingTop;
-                ctx.lineTo(x, y);
-            }
-
-            if (!isTemp) {
-                // Power图闭合底部以填充颜色
-                ctx.lineTo(layout.paddingLeft + graphW, layout.paddingTop + graphH);
-                ctx.lineTo(layout.paddingLeft, layout.paddingTop + graphH);
-                ctx.fill();
+            ctx.strokeStyle = "#555";
+            for(let i=0; i<TOTAL_POINTS; i++) {
+                let x = i * (w/TOTAL_POINTS);
+                let y = map(priceData[i], 0, 0.6, h, 0);
+                if (i==0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
             }
             ctx.stroke();
+
+            // 当前时间线
+            let nowX = currentIndex * (w/TOTAL_POINTS);
+            ctx.beginPath(); ctx.moveTo(nowX, 0); ctx.lineTo(nowX, h); 
+            ctx.strokeStyle = "#007bff"; ctx.lineWidth = 2; ctx.stroke();
         }
 
-        // --- 画房间 (不变) ---
-        function drawRoom() {
-            // 简单重绘逻辑，与之前类似，但坐标系调整
-            roomCtx.lineWidth = 4;
-            roomCtx.strokeStyle = "#555";
-            roomCtx.strokeRect(50, 80, 350, 280);
-            roomCtx.fillStyle = "#e0e0e0";
-            roomCtx.fillRect(50, 360, 350, 20);
-
-            let acPowerColor = currentPower > 0.05 ? "#007bff" : "#bbb";
-            roomCtx.fillStyle = acPowerColor;
-            roomCtx.fillRect(150, 80, 150, 40);
-
-            if (currentPower > 0.05) {
-                let alpha = 0.2 + currentPower * 0.5;
-                let spread = currentPower * 60;
-                let gradient = roomCtx.createLinearGradient(225, 120, 225, 350);
-                gradient.addColorStop(0, `rgba(0, 123, 255, ${alpha})`);
-                gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-                roomCtx.fillStyle = gradient;
-                roomCtx.beginPath();
-                roomCtx.moveTo(160, 120);
-                roomCtx.lineTo(100 - spread, 350);
-                roomCtx.lineTo(350 + spread, 350);
-                roomCtx.lineTo(290, 120);
-                roomCtx.fill();
-            }
-
-            if (isOccupied) {
-                drawBigPerson(roomCtx, 225, 280, "#333");
-                roomCtx.fillStyle = "#28a745";
-                roomCtx.font = "bold 24px Arial";
-                roomCtx.textAlign = "center";
-                roomCtx.fillText("OCCUPIED", 225, 420);
-            } else {
-                roomCtx.fillStyle = "#aaa";
-                roomCtx.font = "italic 24px Arial";
-                roomCtx.textAlign = "center";
-                roomCtx.fillText("UNOCCUPIED", 225, 420);
-            }
-        }
-
-        // --- 工具函数 ---
-        function map(value, inMin, inMax, outMax, outMin) { // 注意 outMin 和 outMax 顺序换了，方便计算
-            return (value - inMin) * (outMin - outMax) / (inMax - inMin) + outMax;
-        }
-
-        function toggleOccupancy() {
-            isOccupied = !isOccupied;
-            const btn = document.getElementById('toggleBtn');
-            const badge = document.getElementById('modeBadge');
-            const occText = document.getElementById('occText');
-            const weightText = document.getElementById('weightText');
-            const constraintText = document.getElementById('constraintText');
-
-            if (isOccupied) {
-                btn.innerText = "Simulate Person Leaves Room";
-                btn.className = "occupied";
-                badge.innerText = "MODE: COMFORT (Precision Control)";
-                badge.className = "status-badge status-comfort";
-                occText.innerText = "YES"; occText.style.color = "#28a745";
-                weightText.innerText = "High (Strict)";
-                constraintText.innerText = "Smoothness Priority";
-            } else {
-                btn.innerText = "Simulate Person Enters Room";
-                btn.className = "";
-                badge.innerText = "MODE: ECO (Energy Saving)";
-                badge.className = "status-badge status-eco";
-                occText.innerText = "NO"; occText.style.color = "gray";
-                weightText.innerText = "Low / Zero";
-                constraintText.innerText = "Relaxed";
-            }
-        }
-
-        function drawBigPerson(ctx, x, y, color) {
-            ctx.fillStyle = color;
+        // 画负荷图 (最重要：削峰可视化)
+        function drawLoadChart(ctx, w, h) {
+            ctx.clearRect(0, 0, w, h);
+            
+            // 1. 原始负荷 (灰色虚线)
             ctx.beginPath();
-            ctx.arc(x, y-30, 18, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.strokeStyle = "#aaa"; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+            for(let i=0; i<TOTAL_POINTS; i++) {
+                let x = i * (w/TOTAL_POINTS);
+                let y = map(loadData[i], 0, 200, h, 0);
+                if (i==0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke(); ctx.setLineDash([]);
+
+            // 2. 优化后负荷 (蓝色实线)
             ctx.beginPath();
-            ctx.moveTo(x - 25, y - 10);
-            ctx.lineTo(x + 25, y - 10);
-            ctx.quadraticCurveTo(x + 35, y - 10, x + 35, y + 10);
-            ctx.lineTo(x + 30, y + 70);
-            ctx.quadraticCurveTo(x + 30, y + 80, x, y + 80);
-            ctx.quadraticCurveTo(x - 30, y + 80, x - 30, y + 70);
-            ctx.lineTo(x - 35, y + 10);
-            ctx.quadraticCurveTo(x - 35, y - 10, x - 25, y - 10);
+            ctx.strokeStyle = "#007bff"; ctx.lineWidth = 3;
+            for(let i=0; i<TOTAL_POINTS; i++) {
+                let x = i * (w/TOTAL_POINTS);
+                let y = map(gridLoad[i], 0, 200, h, 0);
+                if (i==0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // 3. 填充削峰区域 (橙色)
+            ctx.fillStyle = "rgba(255, 165, 0, 0.5)";
+            ctx.beginPath();
+            for(let i=0; i<TOTAL_POINTS; i++) {
+                let x = i * (w/TOTAL_POINTS);
+                let yOld = map(loadData[i], 0, 200, h, 0);
+                let yNew = map(gridLoad[i], 0, 200, h, 0);
+                if (gridLoad[i] < loadData[i]) { // 放电时
+                     if(i==0) ctx.moveTo(x, yOld);
+                     ctx.lineTo(x, yOld); ctx.lineTo(x, yNew);
+                }
+            }
             ctx.fill();
+
+            // 4. 填充充电区域 (绿色)
+            ctx.fillStyle = "rgba(40, 167, 69, 0.3)";
+            ctx.beginPath();
+            for(let i=0; i<TOTAL_POINTS; i++) {
+                let x = i * (w/TOTAL_POINTS);
+                let yOld = map(loadData[i], 0, 200, h, 0);
+                let yNew = map(gridLoad[i], 0, 200, h, 0);
+                if (gridLoad[i] > loadData[i]) { // 充电时
+                     if(i==0) ctx.moveTo(x, yOld);
+                     ctx.lineTo(x, yOld); ctx.lineTo(x, yNew);
+                }
+            }
+            ctx.fill();
+
+            // 当前时间线
+            let nowX = currentIndex * (w/TOTAL_POINTS);
+            ctx.beginPath(); ctx.moveTo(nowX, 0); ctx.lineTo(nowX, h); 
+            ctx.strokeStyle = "#007bff"; ctx.lineWidth = 2; ctx.stroke();
         }
 
-        animate();
+        function map(v, i1, i2, o1, o2) { return o1 + (o2 - o1) * ((v - i1) / (i2 - i1)); }
+
+        // 启动
+        loop();
     </script>
 </body>
 </html>
